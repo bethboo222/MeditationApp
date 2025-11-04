@@ -1,0 +1,19 @@
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.cache/
+*.log
+
+# Mac & IDEs
+.DS_Store
+.vscode/
+.idea/
+
+# Java/Maven
+target/
+*.iml
+*.class
+
+# OS cruft
+Thumbs.db
