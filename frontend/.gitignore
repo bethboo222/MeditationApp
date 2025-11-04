@@ -1,0 +1,9 @@
+# macOS junk
+.DS_Store
+
+# build & deps
+dist/
+node_modules/
+
+# local staging
+import-login/
