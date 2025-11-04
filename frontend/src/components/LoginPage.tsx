@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Button } from '../components/ui/button';
-import { Card } from '../components/ui/card';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
+import { Button } from './ui/button';
+import { Card } from './ui/card';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
 import { Loader2, Sparkles } from 'lucide-react';
-import { useAuth } from '../components/AuthContext';
+import { useAuth } from './AuthContext';
 
 interface LoginPageProps {
   onSwitchToSignup: () => void;
