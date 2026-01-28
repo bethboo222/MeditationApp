@@ -9,9 +9,10 @@ import type { MeditationConfig } from '../App';
 interface MeditationSessionProps {
   config: MeditationConfig;
   onEnd: () => void;
+  onComplete?: () => void;
 }
 
-export function MeditationSession({ config, onEnd }: MeditationSessionProps) {
+export function MeditationSession({ config, onEnd, onComplete }: MeditationSessionProps) {
   const [isPlaying, setIsPlaying] = useState(true);
   const [currentPhase, setCurrentPhase] = useState(0);
   const [elapsed, setElapsed] = useState(0);
@@ -37,16 +38,23 @@ export function MeditationSession({ config, onEnd }: MeditationSessionProps) {
 
     const interval = setInterval(() => {
       setElapsed((prev) => {
-        if (prev >= totalSeconds) {
+        const newElapsed = prev + 1;
+        if (newElapsed >= totalSeconds) {
           setIsPlaying(false);
-          return prev;
+          // Trigger completion callback after a brief delay
+          if (onComplete) {
+            setTimeout(() => {
+              onComplete();
+            }, 2000); // 2 second delay to show completion message
+          }
+          return totalSeconds;
         }
-        return prev + 1;
+        return newElapsed;
       });
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isPlaying, totalSeconds]);
+  }, [isPlaying, totalSeconds, onComplete]);
 
   // Ambient audio generation
   useEffect(() => {
@@ -249,12 +257,7 @@ export function MeditationSession({ config, onEnd }: MeditationSessionProps) {
         {elapsed >= totalSeconds && (
           <div className="mt-6 text-center">
             <div className="text-2xl text-white mb-4">✨ Session Complete ✨</div>
-            <Button
-              onClick={onEnd}
-              className="bg-white text-indigo-900 hover:bg-white/90"
-            >
-              Return to Setup
-            </Button>
+            <div className="text-white/80 mb-4">Redirecting to questionnaire...</div>
           </div>
         )}
       </div>

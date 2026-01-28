@@ -110,7 +110,7 @@ export function generateMeditationScript(config: MeditationConfig): MeditationSc
         {
           title: 'Grounding',
           guidance: 'Feel your connection to the earth beneath you. Imagine roots extending down from your body, drawing up energy from the ground.',
-          breathingPattern: 'Deep, energizing breaths',
+          breathingPattern: 'Deep, energising breaths',
         },
         {
           title: 'Awakening Breath',
