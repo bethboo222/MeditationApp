@@ -1,0 +1,8 @@
+node_modules
+target
+.git
+.gitignore
+*.md
+frontend/node_modules
+frontend/dist
+questionnaire_responses

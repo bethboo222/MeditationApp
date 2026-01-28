@@ -37,10 +37,19 @@ const postures = [
 
 export function MeditationSetup({ onStart }: MeditationSetupProps) {
   const [purpose, setPurpose] = useState<MeditationConfig['purpose']>('focus');
-  const [duration, setDuration] = useState(10);
+  const [duration, setDuration] = useState(5); // Default to 5 minutes
   const [ambience, setAmbience] = useState<MeditationConfig['ambience']>('nature');
   const [posture, setPosture] = useState<MeditationConfig['posture']>('sitting');
   const { user } = useAuth();
+
+  // Format duration display (show seconds if < 1 minute, otherwise minutes)
+  const formatDuration = (minutes: number): string => {
+    if (minutes < 1) {
+      const seconds = Math.round(minutes * 60);
+      return `${seconds} sec`;
+    }
+    return `${minutes} min`;
+  };
 
   const handleStart = () => {
     onStart({ purpose, duration, ambience, posture });
@@ -86,19 +95,19 @@ export function MeditationSetup({ onStart }: MeditationSetupProps) {
           <div className="mb-10">
             <div className="flex justify-between items-center mb-4">
               <Label className="text-lg">Duration</Label>
-              <span className="text-2xl text-indigo-600">{duration} min</span>
+              <span className="text-2xl text-indigo-600">{formatDuration(duration)}</span>
             </div>
             <Slider
               value={[duration]}
               onValueChange={(value) => setDuration(value[0])}
               min={3}
-              max={30}
+              max={15}
               step={1}
               className="w-full"
             />
             <div className="flex justify-between text-xs text-gray-500 mt-2">
               <span>Quick (3 min)</span>
-              <span>Extended (30 min)</span>
+              <span>Extended (15 min)</span>
             </div>
           </div>
 

@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { AuthProvider, useAuth } from './components/AuthContext';
+import { ConsentForm } from './components/ConsentForm';
 import { LoginPage } from './components/LoginPage';
 import { SignupPage } from './components/SignupPage';
 import { MeditationSetup } from './components/MeditationSetup';
 import { MeditationSession } from './components/MeditationSession';
+import { Questionnaire } from './components/Questionnaire';
 import { Button } from './components/ui/button';
 import { LogOut } from 'lucide-react';
 import { MeditationSetup } from './components/MeditationSetup';
@@ -17,23 +19,51 @@ export interface MeditationConfig {
 }
 
 function MeditationApp() {
+  const [hasConsented, setHasConsented] = useState(false);
   const [config, setConfig] = useState<MeditationConfig | null>(null);
   const [isSessionActive, setIsSessionActive] = useState(false);
+  const [showQuestionnaire, setShowQuestionnaire] = useState(false);
   const [authView, setAuthView] = useState<'login' | 'signup'>('login');
   const { user, logout } = useAuth();
 export default function App() {
   const [config, setConfig] = useState<MeditationConfig | null>(null);
   const [isSessionActive, setIsSessionActive] = useState(false);
 
+  const handleConsent = () => {
+    setHasConsented(true);
+  };
+
+  // Show consent form first - always required
+  if (!hasConsented) {
+    return <ConsentForm onConsent={handleConsent} />;
+  }
+
   const handleStartMeditation = (meditationConfig: MeditationConfig) => {
     setConfig(meditationConfig);
     setIsSessionActive(true);
+    setShowQuestionnaire(false);
   };
 
   const handleEndSession = () => {
     setIsSessionActive(false);
     setConfig(null);
+    setShowQuestionnaire(false);
   };
+
+  const handleMeditationComplete = () => {
+    setIsSessionActive(false);
+    setShowQuestionnaire(true);
+  };
+
+  const handleQuestionnaireComplete = () => {
+    setShowQuestionnaire(false);
+    setConfig(null);
+  };
+
+  // Show questionnaire if meditation completed
+  if (showQuestionnaire) {
+    return <Questionnaire onComplete={handleQuestionnaireComplete} />;
+  }
 
   // Show auth pages if user is not logged in
   if (!user) {
@@ -65,7 +95,13 @@ export default function App() {
       {!isSessionActive ? (
         <MeditationSetup onStart={handleStartMeditation} />
       ) : (
-        config && <MeditationSession config={config} onEnd={handleEndSession} />
+        config && (
+          <MeditationSession
+            config={config}
+            onEnd={handleEndSession}
+            onComplete={handleMeditationComplete}
+          />
+        )
       )}
     </div>
   );
