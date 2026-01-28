@@ -52,6 +52,7 @@ export function MeditationSetup({ onStart }: MeditationSetupProps) {
         <div className="text-center mb-8">
           <h1 className="text-5xl mb-3 bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
             Welcome back, {user?.name}
+            Your Personal Meditation
           </h1>
           <p className="text-gray-600">
             Design a meditation session that's uniquely yours
