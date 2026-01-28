@@ -6,6 +6,8 @@ import { MeditationSetup } from './components/MeditationSetup';
 import { MeditationSession } from './components/MeditationSession';
 import { Button } from './components/ui/button';
 import { LogOut } from 'lucide-react';
+import { MeditationSetup } from './components/MeditationSetup';
+import { MeditationSession } from './components/MeditationSession';
 
 export interface MeditationConfig {
   purpose: 'focus' | 'stress-relief' | 'sleep' | 'energy' | 'anxiety';
@@ -19,6 +21,9 @@ function MeditationApp() {
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [authView, setAuthView] = useState<'login' | 'signup'>('login');
   const { user, logout } = useAuth();
+export default function App() {
+  const [config, setConfig] = useState<MeditationConfig | null>(null);
+  const [isSessionActive, setIsSessionActive] = useState(false);
 
   const handleStartMeditation = (meditationConfig: MeditationConfig) => {
     setConfig(meditationConfig);
@@ -55,6 +60,8 @@ function MeditationApp() {
         </div>
       )}
 
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
       {!isSessionActive ? (
         <MeditationSetup onStart={handleStartMeditation} />
       ) : (
