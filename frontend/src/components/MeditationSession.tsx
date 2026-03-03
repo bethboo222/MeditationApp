@@ -9,7 +9,7 @@ import type { MeditationConfig } from '../App';
 interface MeditationSessionProps {
   config: MeditationConfig;
   onEnd: () => void;
-  onComplete?: () => void;
+  onComplete: () => void;
 }
 
 export function MeditationSession({ config, onEnd, onComplete }: MeditationSessionProps) {
@@ -38,23 +38,16 @@ export function MeditationSession({ config, onEnd, onComplete }: MeditationSessi
 
     const interval = setInterval(() => {
       setElapsed((prev) => {
-        const newElapsed = prev + 1;
-        if (newElapsed >= totalSeconds) {
+        if (prev >= totalSeconds) {
           setIsPlaying(false);
-          // Trigger completion callback after a brief delay
-          if (onComplete) {
-            setTimeout(() => {
-              onComplete();
-            }, 2000); // 2 second delay to show completion message
-          }
-          return totalSeconds;
+          return prev;
         }
-        return newElapsed;
+        return prev + 1;
       });
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isPlaying, totalSeconds, onComplete]);
+  }, [isPlaying, totalSeconds]);
 
   // Ambient audio generation
   useEffect(() => {
@@ -84,7 +77,7 @@ export function MeditationSession({ config, onEnd, onComplete }: MeditationSessi
           output[i] *= 3.5;
         }
       };
-
+    
       brownNoise.connect(gainNode);
       gainNode.connect(audioContext.destination);
     } else if (config.ambience === 'ocean') {
@@ -257,7 +250,12 @@ export function MeditationSession({ config, onEnd, onComplete }: MeditationSessi
         {elapsed >= totalSeconds && (
           <div className="mt-6 text-center">
             <div className="text-2xl text-white mb-4">✨ Session Complete ✨</div>
-            <div className="text-white/80 mb-4">Redirecting to questionnaire...</div>
+            <Button
+              onClick={onComplete}
+              className="bg-white text-indigo-900 hover:bg-white/90"
+            >
+              Continue
+            </Button>
           </div>
         )}
       </div>

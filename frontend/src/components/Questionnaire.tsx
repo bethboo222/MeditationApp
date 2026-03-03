@@ -95,28 +95,21 @@ export function Questionnaire({ onComplete }: QuestionnaireProps) {
       },
     };
 
-    // Send to backend silently (user won't see this)
-    // Use environment variable for API URL, fallback to relative path
-    const apiUrl = import.meta.env.VITE_API_URL 
-      ? `${import.meta.env.VITE_API_URL}/questionnaire`
-      : '/api/questionnaire';
-    
-    try {
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) {
-        console.error('Failed to save questionnaire response');
+    // Send to Google Sheets via Apps Script web app (silently)
+    const sheetsUrl = import.meta.env.VITE_SHEETS_URL;
+    if (sheetsUrl) {
+      try {
+        // no-cors bypasses the CORS block caused by Apps Script's redirect response
+        await fetch(sheetsUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify(formData),
+        });
+      } catch (error) {
+        console.error('Error saving questionnaire response:', error);
+        // Continue anyway - don't show error to user
       }
-      // Silently continue even if save fails - don't interrupt user flow
-    } catch (error) {
-      console.error('Error saving questionnaire response:', error);
-      // Continue anyway - don't show error to user
     }
     
     // Proceed to next screen regardless of save result
