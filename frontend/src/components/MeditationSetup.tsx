@@ -4,12 +4,11 @@ import { Card } from './ui/card';
 import { Label } from './ui/label';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Slider } from './ui/slider';
-import { Brain, Heart, Moon, Zap, Wind, Sparkles, CloudRain, Waves, Volume2, VolumeX, Bell } from 'lucide-react';
-import { useAuth } from './AuthContext';
-import type { MeditationConfig } from '../App';
+import { Brain, Heart, Moon, Zap, Wind, Sparkles, CloudRain, Waves, VolumeX, Bell, Loader2 } from 'lucide-react';
+import type { MeditationConfig, ScriptResult } from '../App';
 
 interface MeditationSetupProps {
-  onStart: (config: MeditationConfig) => void;
+  onStart: (config: MeditationConfig, script: ScriptResult) => void;
 }
 
 const purposes = [
@@ -37,12 +36,12 @@ const postures = [
 
 export function MeditationSetup({ onStart }: MeditationSetupProps) {
   const [purpose, setPurpose] = useState<MeditationConfig['purpose']>('focus');
-  const [duration, setDuration] = useState(5); // Default to 5 minutes
+  const [duration, setDuration] = useState(5);
   const [ambience, setAmbience] = useState<MeditationConfig['ambience']>('nature');
   const [posture, setPosture] = useState<MeditationConfig['posture']>('sitting');
-  const { user } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Format duration display (show seconds if < 1 minute, otherwise minutes)
   const formatDuration = (minutes: number): string => {
     if (minutes < 1) {
       const seconds = Math.round(minutes * 60);
@@ -51,8 +50,40 @@ export function MeditationSetup({ onStart }: MeditationSetupProps) {
     return `${minutes} min`;
   };
 
-  const handleStart = () => {
-    onStart({ purpose, duration, ambience, posture });
+  const handleStart = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    const goal = purposes.find(p => p.value === purpose)!.label;
+    const ambienceLabel = ambiences.find(a => a.value === ambience)!.label;
+    const postureLabel = postures.find(p => p.value === posture)!.label;
+
+    // Use VITE_API_BASE_URL in production; fall back to Vite dev proxy in local dev
+    const apiBase = import.meta.env.VITE_API_BASE_URL ?? '';
+
+    try {
+      const res = await fetch(`${apiBase}/api/generate-meditation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          goal,
+          durationSeconds: duration * 60,
+          ambience: ambienceLabel,
+          posture: postureLabel,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error ?? 'Failed to generate script');
+      }
+
+      onStart({ purpose, duration, ambience, posture }, data as ScriptResult);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -60,8 +91,7 @@ export function MeditationSetup({ onStart }: MeditationSetupProps) {
       <div className="w-full max-w-4xl">
         <div className="text-center mb-8">
           <h1 className="text-5xl mb-3 bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-            Welcome back, {user?.name}
-            Your Personal Meditation
+            Welcome
           </h1>
           <p className="text-gray-600">
             Design a meditation session that's uniquely yours
@@ -155,11 +185,23 @@ export function MeditationSetup({ onStart }: MeditationSetupProps) {
             </RadioGroup>
           </div>
 
+          {error && (
+            <p className="text-red-500 text-sm mb-4 text-center">{error}</p>
+          )}
+
           <Button
             onClick={handleStart}
-            className="w-full h-14 text-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+            disabled={isLoading}
+            className="w-full h-14 text-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-70"
           >
-            Begin Your Journey
+            {isLoading ? (
+              <>
+                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                Generating your script…
+              </>
+            ) : (
+              'Begin Your Journey'
+            )}
           </Button>
         </Card>
       </div>

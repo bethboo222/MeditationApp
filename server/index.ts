@@ -3,9 +3,33 @@ import express from 'express';
 import cors from 'cors';
 import OpenAI from 'openai';
 
+// Fail fast if the API key is missing
+if (!process.env.OPENAI_API_KEY) {
+  console.error('ERROR: OPENAI_API_KEY is not set. Create server/.env with OPENAI_API_KEY=sk-...');
+  process.exit(1);
+}
+
 const app = express();
 app.use(express.json());
-app.use(cors());
+
+// CORS: allow any localhost port in dev + optional production origin via FRONTEND_ORIGIN
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. curl, Postman)
+      if (!origin) return callback(null, true);
+
+      // Allow any localhost port during development (5173/5174/5175/etc.)
+      if (/^http:\/\/localhost:\d+$/.test(origin)) return callback(null, true);
+
+      // Allow a specific production frontend origin if set
+      const prod = (process.env.FRONTEND_ORIGIN || "").trim();
+      if (prod && origin === prod) return callback(null, true);
+
+      return callback(new Error(`CORS: origin ${origin} not allowed`));
+    },
+  })
+);
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -48,6 +72,10 @@ async function generateScript(goal: string, ambience: string, posture: string, d
 function countWords(text: string): number {
   return text.trim().split(/\s+/).length;
 }
+
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok' });
+});
 
 app.post('/api/generate-meditation', async (req, res) => {
   const { goal, durationSeconds, ambience, posture } = req.body;
