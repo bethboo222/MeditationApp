@@ -16,6 +16,9 @@ yarn-error.log*
 frontend/dist/
 dist/
 
+# Vite cache
+frontend/node_modules/.vite/
+
 # OS / editor junk
 .DS_Store
 .vscode/

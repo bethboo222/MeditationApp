@@ -10,6 +10,8 @@ export interface MeditationConfig {
   duration: number;
   ambience: 'nature' | 'rain' | 'ocean' | 'silence' | 'bells';
   posture: 'sitting' | 'lying' | 'walking' | 'standing';
+  style: string;
+  preference_notes?: string;
 }
 
 export interface ScriptResult {
@@ -22,6 +24,7 @@ export interface ScriptResult {
   ambience: string;
   posture: string;
   warnings: string[];
+  audioUrl?: string;
 }
 
 export default function App() {
@@ -72,7 +75,7 @@ export default function App() {
         config && (
           <MeditationSession
             config={config}
-            scriptText={scriptResult?.scriptText}
+            audioUrl={scriptResult?.audioUrl}
             onEnd={() => { setIsSessionActive(false); setConfig(null); setScriptResult(null); }}
             onComplete={() => { setIsSessionActive(false); setShowQuestionnaire(true); }}
           />

@@ -4,7 +4,7 @@ import { Card } from './ui/card';
 import { Label } from './ui/label';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Slider } from './ui/slider';
-import { Brain, Heart, Moon, Zap, Wind, Sparkles, CloudRain, Waves, VolumeX, Bell, Loader2 } from 'lucide-react';
+import { Brain, Heart, Moon, Zap, Wind, Sparkles, CloudRain, Waves, VolumeX, Bell, Loader2, ScanLine, Eye, Fingerprint } from 'lucide-react';
 import type { MeditationConfig, ScriptResult } from '../App';
 
 interface MeditationSetupProps {
@@ -17,6 +17,15 @@ const purposes = [
   { value: 'sleep', label: 'Better Sleep', icon: Moon, description: 'Drift away peacefully' },
   { value: 'energy', label: 'Energy Boost', icon: Zap, description: 'Revitalize yourself' },
   { value: 'anxiety', label: 'Ease Anxiety', icon: Wind, description: 'Release tension' },
+] as const;
+
+const styles = [
+  { value: 'Breath Anchor', icon: Wind, description: 'Breath as your focus object' },
+  { value: 'Body Scan', icon: ScanLine, description: 'Progressive attention through the body' },
+  { value: 'Open Monitoring', icon: Eye, description: 'Wide, non-reactive awareness' },
+  { value: 'Grounding Senses', icon: Fingerprint, description: 'Anchor through the five senses' },
+  { value: 'Loving-Kindness', icon: Heart, description: 'Cultivate warmth and compassion' },
+  { value: 'Wind-Down', icon: Moon, description: 'Gentle decompression into rest' },
 ] as const;
 
 const ambiences = [
@@ -36,9 +45,11 @@ const postures = [
 
 export function MeditationSetup({ onStart }: MeditationSetupProps) {
   const [purpose, setPurpose] = useState<MeditationConfig['purpose']>('focus');
+  const [style, setStyle] = useState<string>('Breath Anchor');
   const [duration, setDuration] = useState(5);
   const [ambience, setAmbience] = useState<MeditationConfig['ambience']>('nature');
   const [posture, setPosture] = useState<MeditationConfig['posture']>('sitting');
+  const [preferenceNotes, setPreferenceNotes] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,12 +68,13 @@ export function MeditationSetup({ onStart }: MeditationSetupProps) {
     const goal = purposes.find(p => p.value === purpose)!.label;
     const ambienceLabel = ambiences.find(a => a.value === ambience)!.label;
     const postureLabel = postures.find(p => p.value === posture)!.label;
+    const trimmedNotes = preferenceNotes.trim();
 
     // Use VITE_API_BASE_URL in production; fall back to Vite dev proxy in local dev
     const apiBase = import.meta.env.VITE_API_BASE_URL ?? '';
 
     try {
-      const res = await fetch(`${apiBase}/api/generate-meditation`, {
+      const res = await fetch(`${apiBase}/api/generate-meditation-audio`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -70,6 +82,8 @@ export function MeditationSetup({ onStart }: MeditationSetupProps) {
           durationSeconds: duration * 60,
           ambience: ambienceLabel,
           posture: postureLabel,
+          style,
+          ...(trimmedNotes ? { preference_notes: trimmedNotes } : {}),
         }),
       });
 
@@ -79,7 +93,7 @@ export function MeditationSetup({ onStart }: MeditationSetupProps) {
         throw new Error(data.error ?? 'Failed to generate script');
       }
 
-      onStart({ purpose, duration, ambience, posture }, data as ScriptResult);
+      onStart({ purpose, duration, ambience, posture, style, ...(trimmedNotes ? { preference_notes: trimmedNotes } : {}) }, data as ScriptResult);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
       setIsLoading(false);
@@ -94,7 +108,7 @@ export function MeditationSetup({ onStart }: MeditationSetupProps) {
             Welcome
           </h1>
           <p className="text-gray-600">
-            Design a meditation session that's uniquely yours
+            Pick a goal, a meditation style, and any preferences.
           </p>
         </div>
 
@@ -116,6 +130,28 @@ export function MeditationSetup({ onStart }: MeditationSetupProps) {
                   <Icon className={`w-6 h-6 mb-2 ${purpose === value ? 'text-indigo-600' : 'text-gray-400'}`} />
                   <div className="font-medium mb-1">{label}</div>
                   <div className="text-sm text-gray-500">{description}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Style Selection */}
+          <div className="mb-10">
+            <Label className="text-lg mb-4 block">Meditation Style</Label>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {styles.map(({ value, icon: Icon, description }) => (
+                <button
+                  key={value}
+                  onClick={() => setStyle(value)}
+                  className={`p-4 rounded-xl border-2 transition-all text-left ${
+                    style === value
+                      ? 'border-indigo-500 bg-indigo-50 shadow-md'
+                      : 'border-gray-200 hover:border-indigo-300 bg-white'
+                  }`}
+                >
+                  <Icon className={`w-5 h-5 mb-2 ${style === value ? 'text-indigo-600' : 'text-gray-400'}`} />
+                  <div className="font-medium text-sm mb-1">{value}</div>
+                  <div className="text-xs text-gray-500">{description}</div>
                 </button>
               ))}
             </div>
@@ -185,6 +221,27 @@ export function MeditationSetup({ onStart }: MeditationSetupProps) {
             </RadioGroup>
           </div>
 
+          {/* Preference Notes */}
+          <div className="mb-8">
+            <Label className="text-lg mb-1 block">Anything you want more/less of?</Label>
+            <p className="text-sm text-gray-500 mb-3">One sentence. Example: Less talking, more silence.</p>
+            <div className="relative">
+              <input
+                type="text"
+                value={preferenceNotes}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/[\r\n]/g, '');
+                  if (v.length <= 120) setPreferenceNotes(v);
+                }}
+                placeholder="e.g., Less talking, no visualization, gentle tone…"
+                className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-400 focus:outline-none bg-white text-sm pr-16"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+                {preferenceNotes.length}/120
+              </span>
+            </div>
+          </div>
+
           {error && (
             <p className="text-red-500 text-sm mb-4 text-center">{error}</p>
           )}
@@ -197,10 +254,10 @@ export function MeditationSetup({ onStart }: MeditationSetupProps) {
             {isLoading ? (
               <>
                 <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                Generating your script…
+                Generating your personalised session… (this takes ~15–30 s)
               </>
             ) : (
-              'Begin Your Journey'
+              'Generate My Session'
             )}
           </Button>
         </Card>

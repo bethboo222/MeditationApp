@@ -3,107 +3,89 @@ import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Progress } from './ui/progress';
 import { Play, Pause, Square, X, Volume2, VolumeX } from 'lucide-react';
-import { generateMeditationScript } from './MeditationScriptGenerator';
 import type { MeditationConfig } from '../App';
 
 interface MeditationSessionProps {
   config: MeditationConfig;
-  scriptText?: string;
+  audioUrl?: string;
   onEnd: () => void;
   onComplete: () => void;
 }
 
-function buildQueue(text: string): string[] {
-  const chunks: string[] = [];
-  for (const para of text.split(/\n\n+/)) {
-    const trimmed = para.trim();
-    if (!trimmed) continue;
-    if (trimmed.length <= 300) {
-      chunks.push(trimmed);
-    } else {
-      const sentences = trimmed.match(/[^.!?]+[.!?]+[\s]*/g) ?? [trimmed];
-      chunks.push(...sentences.map(s => s.trim()).filter(Boolean));
-    }
-  }
-  return chunks;
-}
-
-export function MeditationSession({ config, scriptText, onEnd, onComplete }: MeditationSessionProps) {
-  const [isPlaying, setIsPlaying] = useState(true);
-  const isPlayingRef = useRef(isPlaying);
-  const [currentPhase, setCurrentPhase] = useState(0);
+export function MeditationSession({ config, audioUrl, onEnd, onComplete }: MeditationSessionProps) {
+  const [isPlaying, setIsPlaying] = useState(false); // starts false; flips true when audio ready
+  const isPlayingRef = useRef(false);
   const [elapsed, setElapsed] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(config.duration * 60);
+  const [sessionCompleted, setSessionCompleted] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [audioError, setAudioError] = useState(false);
+
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const oscillatorRef = useRef<OscillatorNode | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
 
-  // TTS
-  const ttsSupported = 'speechSynthesis' in window;
-  const [ttsSpeaking, setTtsSpeaking] = useState(false);
-  const [ttsPaused, setTtsPaused] = useState(false);
-  const [ttsChunkIndex, setTtsChunkIndex] = useState(0);
-  const queueRef = useRef<string[]>([]);
-  const indexRef = useRef(0);
-  const speakNextRef = useRef<() => void>(() => {});
+  const progress = audioDuration > 0 ? (elapsed / audioDuration) * 100 : 0;
 
-  const script = generateMeditationScript(config);
-  const totalSeconds = config.duration * 60;
-  const progress = (elapsed / totalSeconds) * 100;
-  const sessionCompleted = elapsed >= totalSeconds;
+  // --- Resolve audioUrl relative to VITE_API_BASE_URL ---
+  const resolvedAudioUrl = audioUrl
+    ? `${import.meta.env.VITE_API_BASE_URL ?? ''}${audioUrl}`
+    : null;
 
-  // Assign speakNextRef each render so utterance callbacks always call the latest version
-  speakNextRef.current = () => {
-    const idx = indexRef.current;
-    if (idx >= queueRef.current.length) {
-      setTtsSpeaking(false);
-      return;
-    }
-    const utterance = new SpeechSynthesisUtterance(queueRef.current[idx]);
-    utterance.rate = 0.9;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
-    utterance.onend = () => {
-      indexRef.current = idx + 1;
-      setTtsChunkIndex(idx + 1);
-      speakNextRef.current();
-    };
-    utterance.onerror = (e) => {
-      if (e.error === 'interrupted') return;
-      indexRef.current = idx + 1;
-      setTtsChunkIndex(idx + 1);
-      speakNextRef.current();
-    };
-    window.speechSynthesis.speak(utterance);
-  };
-
-  // Auto-start TTS on mount; cancel on unmount
+  // --- Set up HTMLAudioElement ---
   useEffect(() => {
-    if (scriptText && ttsSupported) {
-      queueRef.current = buildQueue(scriptText);
-      indexRef.current = 0;
-      setTtsChunkIndex(0);
-      setTtsSpeaking(true);
-      setTtsPaused(false);
-      speakNextRef.current();
-    }
+    if (!resolvedAudioUrl) return;
+
+    const audio = new Audio(resolvedAudioUrl);
+    audioRef.current = audio;
+
+    audio.onloadedmetadata = () => {
+      setAudioDuration(audio.duration);
+    };
+
+    audio.ontimeupdate = () => {
+      setElapsed(audio.currentTime);
+    };
+
+    audio.onended = () => {
+      setIsPlaying(false);
+      isPlayingRef.current = false;
+      setSessionCompleted(true);
+    };
+
+    audio.onerror = () => {
+      console.error('Audio playback error');
+      setAudioError(true);
+      setIsPlaying(false);
+      isPlayingRef.current = false;
+    };
+
+    audio.oncanplaythrough = () => {
+      // Auto-play once buffered
+      audio.play().then(() => {
+        setIsPlaying(true);
+        isPlayingRef.current = true;
+      }).catch((err) => {
+        console.error('Auto-play blocked:', err);
+        // Leave isPlaying=false; user can press Play
+      });
+    };
+
     return () => {
-      if (ttsSupported) window.speechSynthesis.cancel();
+      audio.pause();
+      audio.src = '';
+      audioRef.current = null;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Stop TTS when session timer completes
-  useEffect(() => {
-    if (sessionCompleted && ttsSupported) {
-      window.speechSynthesis.cancel();
-      setTtsSpeaking(false);
-      setTtsPaused(false);
-    }
-  }, [sessionCompleted]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Sync isPlayingRef and suspend/resume AudioContext with play/pause
+  // --- Sync isPlayingRef ---
   useEffect(() => {
     isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
+  // --- Suspend/resume ambience AudioContext with play/pause ---
+  useEffect(() => {
     if (!isPlaying) {
       audioContextRef.current?.suspend().catch(() => {});
     } else {
@@ -111,31 +93,7 @@ export function MeditationSession({ config, scriptText, onEnd, onComplete }: Med
     }
   }, [isPlaying]);
 
-  // Determine current phase based on elapsed time
-  useEffect(() => {
-    const phaseTime = totalSeconds / script.phases.length;
-    const phase = Math.min(Math.floor(elapsed / phaseTime), script.phases.length - 1);
-    setCurrentPhase(phase);
-  }, [elapsed, totalSeconds, script.phases.length]);
-
-  // Timer
-  useEffect(() => {
-    if (!isPlaying) return;
-
-    const interval = setInterval(() => {
-      setElapsed((prev) => {
-        if (prev >= totalSeconds) {
-          setIsPlaying(false);
-          return prev;
-        }
-        return prev + 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [isPlaying, totalSeconds]);
-
-  // Ambient audio generation
+  // --- Ambient audio generation ---
   useEffect(() => {
     if (config.ambience === 'silence' || isMuted) return;
 
@@ -151,7 +109,6 @@ export function MeditationSession({ config, scriptText, onEnd, onComplete }: Med
       const bufferSize = 4096;
       const brownNoise = audioContext.createScriptProcessor(bufferSize, 1, 1);
       let lastOut = 0.0;
-
       brownNoise.onaudioprocess = (e) => {
         const output = e.outputBuffer.getChannelData(0);
         for (let i = 0; i < bufferSize; i++) {
@@ -161,83 +118,68 @@ export function MeditationSession({ config, scriptText, onEnd, onComplete }: Med
           output[i] *= 3.5;
         }
       };
-
       brownNoise.connect(gainNode);
       gainNode.connect(audioContext.destination);
     } else if (config.ambience === 'ocean') {
-      const oscillator = audioContext.createOscillator();
-      const oscillator2 = audioContext.createOscillator();
-      oscillator.type = 'sine';
-      oscillator2.type = 'sine';
-      oscillator.frequency.value = 0.2;
-      oscillator2.frequency.value = 0.15;
-
+      const osc1 = audioContext.createOscillator();
+      const osc2 = audioContext.createOscillator();
+      osc1.type = 'sine'; osc2.type = 'sine';
+      osc1.frequency.value = 0.2; osc2.frequency.value = 0.15;
       const waveGain = audioContext.createGain();
       waveGain.gain.value = 0.5;
-
-      oscillator.connect(waveGain);
-      oscillator2.connect(waveGain);
-      waveGain.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-
-      oscillator.start();
-      oscillator2.start();
-
-      oscillatorRef.current = oscillator;
+      osc1.connect(waveGain); osc2.connect(waveGain);
+      waveGain.connect(gainNode); gainNode.connect(audioContext.destination);
+      osc1.start(); osc2.start();
+      oscillatorRef.current = osc1;
     } else if (config.ambience === 'bells') {
       const playBell = () => {
         const bell = audioContext.createOscillator();
         const bellGain = audioContext.createGain();
-
-        bell.frequency.value = 432;
-        bell.type = 'sine';
-
+        bell.frequency.value = 432; bell.type = 'sine';
         bellGain.gain.setValueAtTime(0.3, audioContext.currentTime);
         bellGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 3);
-
-        bell.connect(bellGain);
-        bellGain.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-
-        bell.start();
-        bell.stop(audioContext.currentTime + 3);
+        bell.connect(bellGain); bellGain.connect(gainNode); gainNode.connect(audioContext.destination);
+        bell.start(); bell.stop(audioContext.currentTime + 3);
       };
-
       playBell();
       const bellInterval = setInterval(() => { if (isPlayingRef.current) playBell(); }, 8000);
-
       return () => {
         clearInterval(bellInterval);
-        if (audioContextRef.current) audioContextRef.current.close();
+        audioContextRef.current?.close();
       };
     }
 
     return () => {
-      if (oscillatorRef.current) oscillatorRef.current.stop();
-      if (audioContextRef.current) audioContextRef.current.close();
+      oscillatorRef.current?.stop();
+      audioContextRef.current?.close();
     };
   }, [config.ambience, isMuted]);
 
+  // --- Controls ---
   const togglePlayPause = () => {
-    const nowPlaying = isPlaying;
-    if (nowPlaying) {
-      if (ttsSupported && ttsSpeaking && !ttsPaused) {
-        window.speechSynthesis.pause();
-        setTtsPaused(true);
-      }
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (isPlaying) {
+      audio.pause();
+      audioContextRef.current?.suspend().catch(() => {});
+      setIsPlaying(false);
+      isPlayingRef.current = false;
     } else {
-      if (ttsSupported && ttsSpeaking && ttsPaused) {
-        window.speechSynthesis.resume();
-        setTtsPaused(false);
-      }
+      audio.play().catch(() => {});
+      audioContextRef.current?.resume().catch(() => {});
+      setIsPlaying(true);
+      isPlayingRef.current = true;
     }
-    setIsPlaying(!nowPlaying);
   };
 
-  const stopTts = () => {
-    window.speechSynthesis.cancel();
-    setTtsSpeaking(false);
-    setTtsPaused(false);
+  const stopAudio = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.pause();
+    audio.currentTime = 0;
+    setElapsed(0);
+    setIsPlaying(false);
+    isPlayingRef.current = false;
   };
 
   const toggleMute = () => {
@@ -249,19 +191,18 @@ export function MeditationSession({ config, scriptText, onEnd, onComplete }: Med
   };
 
   const handleEnd = () => {
-    if (ttsSupported) window.speechSynthesis.cancel();
+    audioRef.current?.pause();
+    audioContextRef.current?.close().catch(() => {});
     onEnd();
   };
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  const formatTime = (secs: number) => {
+    const s = Math.max(0, Math.floor(secs));
+    const m = Math.floor(s / 60);
+    return `${m}:${(s % 60).toString().padStart(2, '0')}`;
   };
 
-  const currentPhaseData = script.phases[currentPhase];
-  const currentChunk = queueRef.current[ttsChunkIndex] ?? '';
-  const showTtsContent = !!scriptText && ttsSupported && ttsSpeaking;
+  const remaining = Math.max(0, audioDuration - elapsed);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative">
@@ -269,7 +210,8 @@ export function MeditationSession({ config, scriptText, onEnd, onComplete }: Med
 
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl top-1/4 left-1/4 animate-pulse" />
-        <div className="absolute w-96 h-96 bg-purple-500/20 rounded-full blur-3xl bottom-1/4 right-1/4 animate-pulse" style={{ animationDelay: '1s' }} />
+        <div className="absolute w-96 h-96 bg-purple-500/20 rounded-full blur-3xl bottom-1/4 right-1/4 animate-pulse"
+          style={{ animationDelay: '1s' }} />
       </div>
 
       <div className="relative w-full max-w-2xl">
@@ -285,50 +227,31 @@ export function MeditationSession({ config, scriptText, onEnd, onComplete }: Med
         <Card className="p-8 backdrop-blur-sm bg-white/10 border-white/20 text-white">
           {/* Timer */}
           <div className="text-center mb-8">
-            <div className="text-6xl mb-2 tabular-nums">
-              {formatTime(totalSeconds - elapsed)}
-            </div>
+            <div className="text-6xl mb-2 tabular-nums">{formatTime(remaining)}</div>
             <div className="text-sm text-white/60">remaining</div>
           </div>
 
           <Progress value={progress} className="h-2 mb-8 bg-white/20" />
 
-          {/* Content: TTS chunk or phase guidance */}
-          <div className="mb-8">
-            {showTtsContent ? (
-              <>
-                <div className="text-sm text-white/60 mb-2 uppercase tracking-wider flex items-center gap-2">
-                  <span className="inline-block w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-                  {ttsPaused ? 'Paused' : 'Speaking'}
-                </div>
-                <div className="text-xl leading-relaxed">{currentChunk}</div>
-              </>
+          {/* Status */}
+          <div className="mb-8 text-center">
+            {audioError ? (
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-200 text-sm">
+                Audio could not be loaded. Please go back and try again.
+              </div>
+            ) : !resolvedAudioUrl ? (
+              <div className="text-white/60 text-lg">Follow along with your meditation.</div>
+            ) : isPlaying ? (
+              <div className="flex items-center justify-center gap-2 text-white/70">
+                <span className="inline-block w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                <span className="text-sm uppercase tracking-wider">Audio guide playing</span>
+              </div>
+            ) : sessionCompleted ? (
+              <div className="text-white/70 text-sm uppercase tracking-wider">Session complete</div>
             ) : (
-              <>
-                <div className="text-sm text-white/60 mb-2 uppercase tracking-wider">
-                  {currentPhaseData.title}
-                </div>
-                <div className="text-xl leading-relaxed">
-                  {currentPhaseData.guidance}
-                </div>
-              </>
+              <div className="text-white/50 text-sm uppercase tracking-wider">Paused</div>
             )}
           </div>
-
-          {/* Breathing guide — only when not in TTS mode */}
-          {!showTtsContent && currentPhaseData.breathingPattern && (
-            <div className="mb-8 p-4 rounded-lg bg-white/5 border border-white/10">
-              <div className="text-sm text-white/60 mb-2">Breathing Pattern</div>
-              <div className="text-lg">{currentPhaseData.breathingPattern}</div>
-            </div>
-          )}
-
-          {/* Unsupported browser notice */}
-          {scriptText && !ttsSupported && (
-            <div className="mb-8 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-200 text-sm">
-              Text-to-speech is not supported in this browser. The script is available on the previous screen.
-            </div>
-          )}
 
           {/* Controls */}
           <div className="flex items-center justify-center gap-4">
@@ -344,18 +267,19 @@ export function MeditationSession({ config, scriptText, onEnd, onComplete }: Med
             <Button
               onClick={togglePlayPause}
               size="icon"
-              className="w-16 h-16 rounded-full bg-white text-indigo-900 hover:bg-white/90"
+              disabled={audioError || sessionCompleted}
+              className="w-16 h-16 rounded-full bg-white text-indigo-900 hover:bg-white/90 disabled:opacity-40"
             >
               {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-1" />}
             </Button>
 
-            {ttsSpeaking ? (
+            {resolvedAudioUrl && !sessionCompleted ? (
               <Button
-                onClick={stopTts}
+                onClick={stopAudio}
                 variant="ghost"
                 size="icon"
                 className="text-white hover:bg-white/10"
-                title="Stop narration"
+                title="Stop and reset to beginning"
               >
                 <Square className="w-5 h-5" />
               </Button>
@@ -367,7 +291,7 @@ export function MeditationSession({ config, scriptText, onEnd, onComplete }: Med
           {/* Session info */}
           <div className="mt-8 pt-6 border-t border-white/10 flex justify-between text-sm text-white/60">
             <div>
-              {config.purpose.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+              {config.purpose.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
             </div>
             <div>
               {config.posture.charAt(0).toUpperCase() + config.posture.slice(1)}
