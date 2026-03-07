@@ -15,17 +15,22 @@ if (!process.env.OPENAI_API_KEY) {
 const app = express();
 app.use(express.json());
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      if (/^http:\/\/localhost:\d+$/.test(origin)) return callback(null, true);
-      const prod = (process.env.FRONTEND_ORIGIN ?? '').trim();
-      if (prod && origin === prod) return callback(null, true);
-      return callback(new Error(`CORS: origin ${origin} not allowed`));
-    },
-  })
-);
+const rawOrigins = process.env.FRONTEND_ORIGIN ?? '';
+const allowedOrigins = rawOrigins
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean)
+  .map(s => s.replace(/\/$/, ''));
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    const normalized = origin.replace(/\/$/, '');
+    if (/^http:\/\/localhost:\d+$/.test(normalized)) return callback(null, true);
+    if (allowedOrigins.includes(normalized)) return callback(null, true);
+    return callback(new Error(`CORS: origin ${origin} not allowed`));
+  },
+}));
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 30_000 });
 
