@@ -22,9 +22,18 @@ Create `server/.env` (copy from `server/.env.example`):
 ```
 OPENAI_API_KEY=sk-...
 PORT=3001
+
+# Optional — override TTS model/voice
+# TTS_MODEL=tts-1-hd
+# TTS_VOICE=nova    # other options: alloy, shimmer, ash, coral; marin/cedar if supported
 ```
 
 Get your API key from [platform.openai.com/api-keys](https://platform.openai.com/api-keys).
+
+> **Note on generation time:** When you click "Begin Your Journey", the server generates a full AI-narrated audio track using OpenAI TTS. This takes approximately:
+> - 3 min session → ~15 s
+> - 15 min session → ~30–45 s
+> A loading message is shown while the audio is being generated.
 
 ---
 
@@ -96,10 +105,14 @@ Set the following environment variables in your hosting dashboard:
 | Variable | Where | Value |
 |---|---|---|
 | `OPENAI_API_KEY` | Server service | Your OpenAI key |
-| `PORT` | Server service | Platform default |
+| `PORT` | Server service | Platform default (e.g. `3001`) |
+| `FRONTEND_ORIGIN` | Server service | Your deployed frontend URL |
+| `VITE_API_BASE_URL` | Frontend build | Your deployed server URL |
 | `VITE_SHEETS_URL` | Frontend build | Your Apps Script URL |
+| `TTS_MODEL` | Server service | (optional) default `tts-1-hd` |
+| `TTS_VOICE` | Server service | (optional) default `nova` |
 
-The `server/` and `frontend/` can be deployed as two separate services. Point the frontend's `VITE_API_URL` to the deployed server URL if needed.
+The `server/` and `frontend/` are deployed as two separate services. Set `VITE_API_BASE_URL` to the server's public URL (e.g. `https://your-server.render.com`).
 
 ---
 
@@ -111,10 +124,18 @@ Press `Ctrl+C` in each terminal.
 
 ## Troubleshooting
 
-### Script not generating?
+### Manual test checklist (audio timing)
+- [ ] Start a **3 min** session — audio ends and "Session Complete" appears at exactly 3:00
+- [ ] Start a **15 min** session — audio ends at exactly 15:00
+- [ ] Pause mid-session — timer freezes, ambience stops
+- [ ] Resume — timer continues, ambience resumes
+- [ ] Stop (square button) — timer resets to start, audio stops
+
+### Audio not generating?
 - Check the server terminal for error output
 - Make sure `server/.env` exists with a valid `OPENAI_API_KEY`
 - Ensure the server is running on port 3001 **before** starting the frontend
+- Generation takes 15–45 s depending on session length — the loading message is normal
 
 ### Questionnaire responses not appearing in the sheet?
 - Check that `VITE_SHEETS_URL` is set correctly in `frontend/.env.local`
