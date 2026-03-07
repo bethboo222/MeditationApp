@@ -302,7 +302,7 @@ export function MeditationSession({ config, audioUrl, onEnd, onComplete }: Medit
         {/* Completion */}
         {sessionCompleted && (
           <div className="mt-6 text-center">
-            <div className="text-2xl text-white mb-4">✨ Session Complete ✨</div>
+            <div className="text-2xl text-white mb-4"> Session Complete </div>
             <Button
               onClick={onComplete}
               className="bg-white text-indigo-900 hover:bg-white/90"

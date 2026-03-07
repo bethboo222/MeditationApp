@@ -4,7 +4,7 @@ import { Card } from './ui/card';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 
 interface QuestionnaireProps {
   onComplete: () => void;
@@ -51,6 +51,7 @@ export function Questionnaire({ onComplete }: QuestionnaireProps) {
   const [additionalComments, setAdditionalComments] = useState('');
 
   const [showUnder18Message, setShowUnder18Message] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleAgeChange = (value: string) => {
     setAge(value);
@@ -63,11 +64,11 @@ export function Questionnaire({ onComplete }: QuestionnaireProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Check if under 18
-    if (age === 'under18') {
-      return;
-    }
+
+    if (age === 'under18') return;
+    if (isSubmitting) return;
+
+    setIsSubmitting(true);
 
     const formData = {
       sectionA: {
@@ -95,11 +96,9 @@ export function Questionnaire({ onComplete }: QuestionnaireProps) {
       },
     };
 
-    // Send to Google Sheets via Apps Script web app (silently)
     const sheetsUrl = import.meta.env.VITE_SHEETS_URL;
     if (sheetsUrl) {
       try {
-        // no-cors bypasses the CORS block caused by Apps Script's redirect response
         await fetch(sheetsUrl, {
           method: 'POST',
           mode: 'no-cors',
@@ -108,11 +107,11 @@ export function Questionnaire({ onComplete }: QuestionnaireProps) {
         });
       } catch (error) {
         console.error('Error saving questionnaire response:', error);
-        // Continue anyway - don't show error to user
       }
     }
-    
-    // Proceed to next screen regardless of save result
+
+    // Always advance — setIsSubmitting(false) is harmless if component unmounts
+    setIsSubmitting(false);
     onComplete();
   };
 
@@ -583,11 +582,21 @@ export function Questionnaire({ onComplete }: QuestionnaireProps) {
             <div className="border-t pt-8">
               <Button
                 type="submit"
-                className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
-                disabled={age === 'under18'}
+                className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-70"
+                disabled={age === 'under18' || isSubmitting}
               >
-                Submit Questionnaire
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Submitting…
+                  </>
+                ) : (
+                  'Submit Questionnaire'
+                )}
               </Button>
+              {isSubmitting && (
+                <p className="text-sm text-gray-500 text-center mt-2">Saving your responses…</p>
+              )}
             </div>
           </form>
         </Card>
