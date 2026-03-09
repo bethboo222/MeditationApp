@@ -249,13 +249,13 @@ export function MeditationSetup({ onStart }: MeditationSetupProps) {
           <Button
             onClick={handleStart}
             disabled={isLoading}
-            className="w-full h-14 text-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-70"
+            className="w-full min-h-14 h-auto py-3 text-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-70"
           >
             {isLoading ? (
-              <>
-                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                Generating your personalised session… (this takes ~15–30 s)
-              </>
+              <span className="flex items-center justify-center gap-2 flex-wrap text-center">
+                <Loader2 className="w-5 h-5 animate-spin shrink-0" />
+                <span>Generating your personalised session…<br className="sm:hidden" /> <span className="text-sm opacity-80">(this takes ~15–30 s)</span></span>
+              </span>
             ) : (
               'Generate My Session'
             )}

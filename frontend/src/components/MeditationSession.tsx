@@ -22,9 +22,7 @@ export function MeditationSession({ config, audioUrl, onEnd, onComplete }: Medit
   const [audioError, setAudioError] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const oscillatorRef = useRef<OscillatorNode | null>(null);
-  const gainNodeRef = useRef<GainNode | null>(null);
+  const ambienceRef = useRef<HTMLAudioElement | null>(null);
 
   const progress = audioDuration > 0 ? (elapsed / audioDuration) * 100 : 0;
 
@@ -79,81 +77,45 @@ export function MeditationSession({ config, audioUrl, onEnd, onComplete }: Medit
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const AMBIENCE_SRCS: Partial<Record<MeditationConfig['ambience'], string>> = {
+    nature: '/ambience/forest.mp3',
+    rain:   '/ambience/rain.mp3',
+    ocean:  '/ambience/ocean.mp3',
+    bells:  '/ambience/bowls.mp3',
+  };
+
   // --- Sync isPlayingRef ---
   useEffect(() => {
     isPlayingRef.current = isPlaying;
   }, [isPlaying]);
 
-  // --- Suspend/resume ambience AudioContext with play/pause ---
+  // --- Set up looping ambience audio element ---
   useEffect(() => {
-    if (!isPlaying) {
-      audioContextRef.current?.suspend().catch(() => {});
-    } else {
-      audioContextRef.current?.resume().catch(() => {});
-    }
-  }, [isPlaying]);
+    const src = AMBIENCE_SRCS[config.ambience];
+    if (!src) return;
 
-  // --- Ambient audio generation ---
-  useEffect(() => {
-    if (config.ambience === 'silence' || isMuted) return;
-
-    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-    const audioContext = new AudioContext();
-    audioContextRef.current = audioContext;
-
-    const gainNode = audioContext.createGain();
-    gainNode.gain.value = 0.1;
-    gainNodeRef.current = gainNode;
-
-    if (config.ambience === 'nature' || config.ambience === 'rain') {
-      const bufferSize = 4096;
-      const brownNoise = audioContext.createScriptProcessor(bufferSize, 1, 1);
-      let lastOut = 0.0;
-      brownNoise.onaudioprocess = (e) => {
-        const output = e.outputBuffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-          const white = Math.random() * 2 - 1;
-          output[i] = (lastOut + (0.02 * white)) / 1.02;
-          lastOut = output[i];
-          output[i] *= 3.5;
-        }
-      };
-      brownNoise.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-    } else if (config.ambience === 'ocean') {
-      const osc1 = audioContext.createOscillator();
-      const osc2 = audioContext.createOscillator();
-      osc1.type = 'sine'; osc2.type = 'sine';
-      osc1.frequency.value = 0.2; osc2.frequency.value = 0.15;
-      const waveGain = audioContext.createGain();
-      waveGain.gain.value = 0.5;
-      osc1.connect(waveGain); osc2.connect(waveGain);
-      waveGain.connect(gainNode); gainNode.connect(audioContext.destination);
-      osc1.start(); osc2.start();
-      oscillatorRef.current = osc1;
-    } else if (config.ambience === 'bells') {
-      const playBell = () => {
-        const bell = audioContext.createOscillator();
-        const bellGain = audioContext.createGain();
-        bell.frequency.value = 432; bell.type = 'sine';
-        bellGain.gain.setValueAtTime(0.3, audioContext.currentTime);
-        bellGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 3);
-        bell.connect(bellGain); bellGain.connect(gainNode); gainNode.connect(audioContext.destination);
-        bell.start(); bell.stop(audioContext.currentTime + 3);
-      };
-      playBell();
-      const bellInterval = setInterval(() => { if (isPlayingRef.current) playBell(); }, 8000);
-      return () => {
-        clearInterval(bellInterval);
-        audioContextRef.current?.close();
-      };
-    }
+    const amb = new Audio(src);
+    amb.loop = true;
+    amb.volume = 0.25;
+    ambienceRef.current = amb;
 
     return () => {
-      oscillatorRef.current?.stop();
-      audioContextRef.current?.close();
+      amb.pause();
+      amb.src = '';
+      ambienceRef.current = null;
     };
-  }, [config.ambience, isMuted]);
+  }, [config.ambience]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // --- Sync ambience play/pause with session state ---
+  useEffect(() => {
+    const amb = ambienceRef.current;
+    if (!amb) return;
+    if (isPlaying && !isMuted) {
+      amb.play().catch(() => {});
+    } else {
+      amb.pause();
+    }
+  }, [isPlaying, isMuted]);
 
   // --- Controls ---
   const togglePlayPause = () => {
@@ -161,12 +123,10 @@ export function MeditationSession({ config, audioUrl, onEnd, onComplete }: Medit
     if (!audio) return;
     if (isPlaying) {
       audio.pause();
-      audioContextRef.current?.suspend().catch(() => {});
       setIsPlaying(false);
       isPlayingRef.current = false;
     } else {
       audio.play().catch(() => {});
-      audioContextRef.current?.resume().catch(() => {});
       setIsPlaying(true);
       isPlayingRef.current = true;
     }
@@ -183,16 +143,12 @@ export function MeditationSession({ config, audioUrl, onEnd, onComplete }: Medit
   };
 
   const toggleMute = () => {
-    const nextMuted = !isMuted;
-    setIsMuted(nextMuted);
-    if (gainNodeRef.current) {
-      gainNodeRef.current.gain.value = nextMuted ? 0 : 0.1;
-    }
+    setIsMuted(m => !m);
   };
 
   const handleEnd = () => {
     audioRef.current?.pause();
-    audioContextRef.current?.close().catch(() => {});
+    ambienceRef.current?.pause();
     onEnd();
   };
 
